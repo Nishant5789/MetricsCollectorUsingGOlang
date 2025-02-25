@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
-
 	"golang.org/x/crypto/ssh"
 )
+
 type MetricResult struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
@@ -66,26 +67,22 @@ func GetLinuxDeviceData(username, password, host, port string) string {
 		"system.cpu.idle.percent":              "mpstat 1 1 | grep 'Average' | awk '{print $11}'",
 	}
 
-	// Connect to SSH
 	client, err := connectToSSH(username, password, host, port)
 	if err != nil {
-		fmt.Printf("❌ SSH connection failed: %v\n", err)
+		log.Printf("SSH connection failed: %v", err)
 		return string("")
 	}
 	defer client.Close()
 
-	// Channels and wait group
 	jobs := make(chan [2]string, len(commands))
 	results := make(chan MetricResult, len(commands))
 	var wg sync.WaitGroup
 
-	// Start workers
 	numWorkers := 5
 	for i := 0; i < numWorkers; i++ {
 		go worker(client, jobs, results, &wg)
 	}
 
-	// Send commands to the jobs channel and increment wait group
 	for metric, cmd := range commands {
 		wg.Add(1) // Increment wait group before sending job
 		jobs <- [2]string{metric, cmd}
@@ -97,27 +94,26 @@ func GetLinuxDeviceData(username, password, host, port string) string {
 		close(results)
 	}()
 
-	// Collect results
 	var metrics []MetricResult
 	for result := range results {
 		metrics = append(metrics, result)
 		if result.Error != "" {
-			fmt.Printf("⚠️ Error: %s - %s\n", result.Name, result.Error)
-		} else {
-			fmt.Printf("✅ %s: %s\n", result.Name, result.Value)
-		}
+			log.Printf("Error: %s - %s", result.Name, result.Error)
+			} else {
+				log.Printf("%s: %s", result.Name, result.Value)
+			}
 	}
 
-	// Write results to JSON
 	overallResult := OverallResult{Metrics: metrics}
 	jsonData, err := json.MarshalIndent(overallResult, "", "  ")
 	if err != nil {
-		fmt.Printf("❌ Failed to marshal JSON: %v\n", err)
+		log.Printf("Failed to marshal JSON: %v", err)
 		return string("")
 	}
 
     return string(jsonData)
 }
+
 // Connect to the SSH server
 func connectToSSH(user, password, host, port string) (*ssh.Client, error) {
 	config := &ssh.ClientConfig{
