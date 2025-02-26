@@ -7,6 +7,7 @@ import (
 	"log"
 	"sync"
 	"time"
+
 	"golang.org/x/crypto/ssh"
 )
 
@@ -21,70 +22,67 @@ type OverallResult struct {
 }
 
 func GetLinuxDeviceData(username, password, host, port string) string {
-	// Define commands to collect metrics
 	commands := map[string]string{
-		"system.overall.memory.free.bytes":     "free -b | grep 'Mem:' | awk '{print $4}'",
-		"system.load.avg15.min":                "uptime | awk '{print $10}'",
-		"system.swap.memory.free.bytes":        "free -b | grep 'Swap:' | awk '{print $4}'",
-		"system.swap.memory.used.percent":      "free -b | grep 'Swap:' | awk '{if ($2 > 0) print ($3/$2)*100; else print 0}'",
-		"system.load.avg1.min":                 "uptime | awk '{print $8}'",
-		"system.network.udp.connections":       "netstat -ua | grep 'udp' | wc -l",
-		"system.load.avg5.min":                 "uptime | awk '{print $9}'",
-		"system.blocked.processes":             "ps -eLf | grep ' D ' | wc -l",
-		"system.cache.memory.bytes":            "free -b | grep 'Mem:' | awk '{print $6}'",
-		"system.network.tcp.connections":       "netstat -ta | grep 'tcp' | wc -l",
-		"system.cpu.cores":                     "lscpu | grep '^CPU(s):' | awk '{print $2}'",
-		"system.os.name":                       "uname -s",
-		"system.os.version":                    "lsb_release -r | grep 'Release' | awk '{print $2}'",
-		"system.context.switches.per.sec":      "vmstat 1 2 | tail -1 | awk '{print $12}'",
-		"system.disk.capacity.bytes":           "df -B1 | tail -1 | awk '{print $2}'",
-		"system.buffer.memory.bytes":           "free -b | grep 'Mem:' | awk '{print $6}'",
-		"system.swap.memory.used.bytes":        "free -b | grep 'Swap:' | awk '{print $3}'",
-		"system.cpu.interrupt.percent":         "mpstat 1 1 | grep 'Average' | awk '{print $8}'",
-		"system.memory.available.bytes":        "free -b | grep 'Mem:' | awk '{print $7}'",
-		"system.overall.memory.used.bytes":     "free -b | grep 'Mem:' | awk '{print $3}'",
-		"started.time":                         "uptime | awk '{print $1}'",
-		"started.time.seconds":                 "awk '{print $1}' /proc/uptime",
-		"system.swap.memory.free.percent":      "free -b | grep 'Swap:' | awk '{if ($2 > 0) print ($4/$2)*100; else print 0}'",
-		"system.memory.installed.bytes":        "free -b | grep 'Mem:' | awk '{print $2}'",
-		"system.cpu.percent":                   "top -bn1 | grep '%Cpu' | awk '{print 100 - $8}'",
-		"system.disk.free.bytes":               "df -B1 | tail -1 | awk '{print $4}'",
-		"system.memory.used.bytes":             "free -b | grep 'Mem:' | awk '{print $3}'",
-		"system.memory.free.bytes":             "free -b | grep 'Mem:' | awk '{print $4}'",
-		"system.overall.memory.used.percent":   "free -b | grep 'Mem:' | awk '{print ($3/$2)*100}'",
-		"system.running.processes":             "ps aux | wc -l | awk '{print $1}'",
-		"system.memory.free.percent":           "free -b | grep 'Mem:' | awk '{print ($4/$2)*100}'",
-		"system.disk.free.percent":             "df -h / | tail -n1 | awk '{print $4}' | grep -o '[0-9]*'",
-		"system.cpu.io.percent":                "iostat -c 1 2 | tail -n2 | head -n1 | awk '{print $4}'",
-		"system.disk.used.percent":             "df -h / | tail -n1 | awk '{print $5}' | grep -o '[0-9]*'",
-		"system.network.error.packets":         "netstat -i | tail -n+3 | awk '{print $6+$8}' | grep -v '^0$' | wc -l",
-		"system.threads":                       "ps -eLf | wc -l | awk '{print $1-1}'",
-		"system.name":                          "uname -n | awk '{print $1}'",
-		"system.disk.used.bytes":               "df -B1 / | tail -n1 | awk '{print $3}'",
-		"system.memory.used.percent":           "free -b | grep 'Mem:' | awk '{print ($3/$2)*100}'",
-		"system.overall.memory.free.percent":   "free -b | grep 'Mem:' | awk '{print ($4/$2)*100}'",
-		"system.cpu.kernel.percent":            "mpstat 1 1 | grep 'Average' | awk '{print $3}'",
-		"system.cpu.idle.percent":              "mpstat 1 1 | grep 'Average' | awk '{print $11}'",
+	"system.overall.memory.free.bytes":    "free -b | awk '/Mem:/ {print $4}'",
+	"system.memory.free.bytes":            "free -b | awk '/Mem:/ {print $4}'", 
+	"system.overall.memory.used.bytes":    "free -b | awk '/Mem:/ {print $3}'",
+	"system.memory.used.bytes":            "free -b | awk '/Mem:/ {print $3}'",
+	"system.memory.installed.bytes":       "free -b | awk '/Mem:/ {print $2}'",
+	"system.memory.available.bytes":       "free -b | awk '/Mem:/ {print $7}'",
+	"system.cache.memory.bytes":           "free -b | awk '/Mem:/ {print $6}'",
+	"system.buffer.memory.bytes":          "free -b | awk '/Mem:/ {print $6}'", 
+	"system.overall.memory.used.percent":  "free -b | awk '/Mem:/ {print ($3/$2)*100}'",
+	"system.memory.used.percent":          "free -b | awk '/Mem:/ {print ($3/$2)*100}'", 
+	"system.overall.memory.free.percent":  "free -b | awk '/Mem:/ {print ($4/$2)*100}'",
+	"system.memory.free.percent":          "free -b | awk '/Mem:/ {print ($4/$2)*100}'", 
+	"system.swap.memory.free.bytes":       "free -b | awk '/Swap:/ {print $4}'",
+	"system.swap.memory.used.bytes":       "free -b | awk '/Swap:/ {print $3}'",
+	"system.swap.memory.used.percent":     "free -b | awk '/Swap:/ {if ($2 > 0) print ($3/$2)*100; else print 0}'",
+	"system.swap.memory.free.percent":     "free -b | awk '/Swap:/ {if ($2 > 0) print ($4/$2)*100; else print 0}'",
+	"system.load.avg1.min":                "uptime | awk '{print $8}' | tr -d ','",
+	"system.load.avg5.min":                "uptime | awk '{print $9}' | tr -d ','",
+	"system.load.avg15.min":               "uptime | awk '{print $10}' | tr -d ','",
+	"system.cpu.cores":                    "nproc",
+	"system.cpu.percent":                  "top -bn1 | awk '/%Cpu/ {print 100 - $8}'",
+	"system.cpu.kernel.percent":           "cat /proc/stat | awk '/cpu / {print ($2+$4)*100/($2+$4+$5)}'",
+	"system.cpu.idle.percent":             "cat /proc/stat | awk '/cpu / {print $5*100/($2+$4+$5)}'",
+	"system.cpu.interrupt.percent":        "cat /proc/stat | awk '/cpu / {print $7*100/($2+$4+$5)}'",
+	"system.cpu.io.percent":               "iostat -c | awk 'NR==4 {print $4}'", // Avoids delay
+	"system.disk.capacity.bytes":          "df -B1 / | awk 'NR==2 {print $2}'",
+	"system.disk.free.bytes":              "df -B1 / | awk 'NR==2 {print $4}'",
+	"system.disk.used.bytes":              "df -B1 / | awk 'NR==2 {print $3}'",
+	"system.disk.free.percent":            "df -h / | awk 'NR==2 {print $4}' | tr -d '%'",
+	"system.disk.used.percent":            "df -h / | awk 'NR==2 {print $5}' | tr -d '%'",
+	"system.network.tcp.connections":      "ss -t | wc -l",
+	"system.network.udp.connections":      "ss -u | wc -l",
+	"system.network.error.packets":        "cat /proc/net/dev | awk 'NR>2 {sum += $4+$12} END {print sum}'",
+	"system.running.processes":            "ps -e | wc -l",
+	"system.blocked.processes":            "ps -e -o stat | grep 'D' | wc -l",
+	"system.threads":                      "cat /proc/stat | awk '/processes/ {print $2}'", // Total forks, approx thread count
+	"system.os.name":                      "uname -s",
+	"system.os.version":                   "lsb_release -rs 2>/dev/null || echo 'N/A'",
+	"system.name":                         "hostname",
+	"started.time":                        "uptime -p | cut -d' ' -f2-",
+	"started.time.seconds":                "cat /proc/uptime | awk '{print $1}'",
+	"system.context.switches.per.sec":     "cat /proc/stat | awk '/ctxt/ {print $2}'", // Cumulative, not per-second
 	}
 
 	client, err := connectToSSH(username, password, host, port)
 	if err != nil {
 		log.Printf("SSH connection failed: %v", err)
-		return string("")
+		return string("SSH connection failed")
 	}
+	log.Printf("SSH connection Success")
 	defer client.Close()
 
 	jobs := make(chan [2]string, len(commands))
 	results := make(chan MetricResult, len(commands))
 	var wg sync.WaitGroup
 
-	numWorkers := 5
-	for i := 0; i < numWorkers; i++ {
-		go worker(client, jobs, results, &wg)
-	}
+	go worker(client, jobs, results, &wg)
 
 	for metric, cmd := range commands {
-		wg.Add(1) // Increment wait group before sending job
+		wg.Add(1) 
 		jobs <- [2]string{metric, cmd}
 	}
 	close(jobs)
@@ -99,16 +97,14 @@ func GetLinuxDeviceData(username, password, host, port string) string {
 		metrics = append(metrics, result)
 		if result.Error != "" {
 			log.Printf("Error: %s - %s", result.Name, result.Error)
-			} else {
-				log.Printf("%s: %s", result.Name, result.Value)
-			}
+		} 
 	}
 
 	overallResult := OverallResult{Metrics: metrics}
 	jsonData, err := json.MarshalIndent(overallResult, "", "  ")
 	if err != nil {
 		log.Printf("Failed to marshal JSON: %v", err)
-		return string("")
+		return string("Failed to marshal JSON")
 	}
 
     return string(jsonData)
